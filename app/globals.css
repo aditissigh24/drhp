@@ -37,11 +37,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 10px 18px; background: var(--panel);
   border-bottom: 1px solid var(--border); flex: none;
 }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 640; letter-spacing: -.01em; }
-.brand .dot {
-  width: 26px; height: 26px; border-radius: 8px; flex: none;
-  background: linear-gradient(140deg, #2563eb, #7c3aed);
-  display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700;
+.brand {
+  display: flex; align-items: center; font-weight: 640;
+  letter-spacing: -.01em; white-space: nowrap;
+  padding-left: 14px; border-left: 1px solid var(--border);
+}
+
+/* ── Modus AI wordmark ─────────────────────────────────────────────────── */
+.modus { position: relative; display: inline-flex; align-items: center; flex: none; padding-right: 6px; }
+.modus-word {
+  font-size: 19px; font-weight: 700; letter-spacing: -.03em;
+  line-height: 1; color: #00285B;
+}
+.modus-spark {
+  position: absolute; top: -6px; right: -3px;
+  width: 11px; height: 11px; color: #00285B;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
 }
 .crumb { color: var(--faint); font-size: 13px; }
 .crumb b { color: var(--muted); font-weight: 550; }

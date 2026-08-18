@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Circle Ups — MHEL DRHP',
-  description: 'Marks every binding representation in the Our Business section of the Manipal Health Enterprises DRHP.',
+  title: 'NSE - Due Diligence — Manipal Health Enterprises Limited',
+  description: 'Marks every binding representation in the Our Business section of the Manipal Health Enterprises Limited DRHP.',
 };
 
 export default function RootLayout({ children }) {

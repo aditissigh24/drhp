@@ -18,9 +18,28 @@ import os from 'node:os';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
-const PDF = path.join(ROOT, 'Registration_24032026122414_MHEL_DRHP.pdf');
+const FRONTEND = path.resolve(HERE, '..');
+const SEARCH_DIRS = [FRONTEND, ROOT, path.join(FRONTEND, 'public')];
+
+/**
+ * The source PDF and the extraction JSON have moved around between the repo
+ * root and frontend/. Look in both rather than hard-coding one layout.
+ */
+function findFile(names, dirs) {
+  for (const d of dirs) {
+    for (const n of names) {
+      const p = path.join(d, n);
+      if (existsSync(p)) return p;
+    }
+  }
+  throw new Error(
+    `Could not find ${names[0]}. Looked in:\n  ${dirs.join('\n  ')}`,
+  );
+}
+
+const PDF = findFile(['Registration_24032026122414_MHEL_DRHP.pdf'], SEARCH_DIRS);
 const CACHE = path.join(HERE, 'cache');
-const FACTS = path.join(ROOT, 'manipal_drhp_our_business_facts.json');
+const FACTS = findFile(['manipal_drhp_our_business_facts.json'], SEARCH_DIRS);
 
 const DPI = 400;
 const PT_PER_PX = 72 / DPI;

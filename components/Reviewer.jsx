@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PageView from './PageView';
 import FactPanel from './FactPanel';
+import ModusLogo from './ModusLogo';
 
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2.4;
@@ -179,9 +180,10 @@ export default function Reviewer() {
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand"><span className="dot">C</span> Circle Ups</div>
+        <ModusLogo />
+        <div className="brand">NSE - Due Diligence</div>
         <div className="crumb">
-          <b>MHEL DRHP</b> · Our Business · pages {firstPage}–{lastPage}
+          <b>Manipal Health Enterprises Limited</b> · DRHP · Our Business · pages {firstPage}–{lastPage}
         </div>
 
         <div className="spacer" />

@@ -1,0 +1,19 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      # next.config.mjs sets output:'export', so this emits a static ./out.
+      # Nothing here needs tesseract or poppler — anchors.json and facts.json
+      # are pre-resolved and committed under public/.
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: out
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
