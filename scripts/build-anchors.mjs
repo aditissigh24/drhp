@@ -68,7 +68,7 @@ for (const pn of needed) {
 // Strategies strong enough to trust when the match lands on a page the
 // extraction did not claim. A bare number matches anywhere, so a distant page
 // has to be earned by surrounding context, never by the value alone.
-const CONTEXT_BEARING = /^(table-row|table-label|context)/;
+const CONTEXT_BEARING = /^(table-|context)/;
 
 const anchors = {};
 const stats = {
@@ -94,7 +94,10 @@ for (const f of facts) {
         // carries recognition errors, so hold it to the same bar throughout.
         if ((mode === 'loose' || layer === 'ocr') && !CONTEXT_BEARING.test(hit.strategy)) continue;
         if (accept && !accept(hit)) continue;
-        const rects = rangeToRects(hit, L, mode);
+        // A fact may resolve to several spans when its sentence repeats the
+        // value (actual vs pro forma); each one gets its own mark.
+        const spans = hit.spans?.length ? hit.spans : [[hit.start, hit.end]];
+        const rects = spans.flatMap(([start, end]) => rangeToRects({ start, end }, L, mode));
         if (!rects.length) continue;
         const strategy = hit.strategy
           + (mode === 'loose' ? '~loose' : '')

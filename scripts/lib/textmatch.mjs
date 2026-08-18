@@ -108,6 +108,64 @@ function tableCells(context) {
   return context.split('|').map((c) => c.trim()).filter(Boolean);
 }
 
+
+/** A cell that reads as a figure rather than a label. */
+const isNumericCell = (c) => /\d/.test(c) && /^[\s\d.,%()\-₹A-Za-z]{0,4}[\d.,%()\-₹]+[\s%)]*$/.test(c.trim());
+
+/**
+ * Resolve a table cell by its *position in the row*, not by hunting for its
+ * value. The context sentence gives the cell order, so the target's ordinal
+ * among the row's figures is known: in
+ *   "| Columbia Asia | Fiscal 2022 | … | 21.59% | 27.41% | 31.95% |"
+ * 27.41% is the 4th figure. We anchor the row label, then walk the figures
+ * along that label's baseline in increasing-x order and take the 4th.
+ *
+ * The whole chain has to check out — every figure in the context must be found
+ * on that baseline, left to right. A prose mention of "Columbia Asia" has no
+ * such row beside it, so it is rejected instead of silently accepted, which is
+ * exactly the failure this replaces. Returns null when it cannot prove the row,
+ * leaving the older strategies to try.
+ */
+function tableOrdinal(cells, rawQ, targetCell, P, mode, N, q) {
+  const label = cells.find((c) => !isNumericCell(c) && q(c).length > 2);
+  if (!label) return null;
+
+  const figures = cells.filter(isNumericCell);
+  const targetIsFigure = targetCell >= 0 && isNumericCell(cells[targetCell]);
+  if (!targetIsFigure || figures.length < 2) return null;
+  const ordinal = cells.slice(0, targetCell).filter(isNumericCell).length;
+
+  const labQ = q(label);
+  for (const li of allIndexesOf(N.norm, labQ)) {
+    const row = baselineAt(li, P, mode, N);
+    if (!row) continue;
+    const tol = Math.max(2, row.h * 0.5);
+
+    // Walk the figures left to right, each strictly right of the previous.
+    let x = row.x;
+    let resolved = null;
+    let complete = true;
+    for (let k = 0; k < figures.length; k++) {
+      const fq = q(figures[k]);
+      const next = allIndexesOf(N.norm, fq)
+        .map((h) => ({ h, g: baselineAt(h, P, mode, N) }))
+        .filter((c) => c.g && Math.abs(c.g.y - row.y) <= tol && c.g.x > x)
+        .sort((a, b) => a.g.x - b.g.x)[0];
+      if (!next) { complete = false; break; }
+      x = next.g.x;
+      if (k === ordinal) resolved = next.h;
+    }
+    // Self-check here rather than at the top level: a failure must fall through
+    // to the older strategies, not discard the fact.
+    if (complete && resolved != null
+        && N.norm.slice(resolved, resolved + rawQ.length) === rawQ
+        && boundaryOk(P, N, resolved, resolved + rawQ.length, rawQ)) {
+      return { start: resolved, end: resolved + rawQ.length, strategy: 'table-ordinal', ambiguous: false };
+    }
+  }
+  return null;
+}
+
 /**
  * Reject a match that starts or ends *inside* a longer token — "18" found in
  * the middle of "2,188", or "9" in "₹92,635.56". Normalised text can't tell
@@ -181,14 +239,25 @@ function locateSpan(fact, P, mode) {
   const targetHits = (from, to) =>
     allIndexesOf(N.norm, rawQ, from, to).filter((i) => boundaryOk(P, N, i, i + rawQ.length, rawQ));
 
-  const withinCtx = (cs, ce, strategy) => {
+  /**
+   * `markAll` is for windows that are exactly one sentence. A DRHP routinely
+   * states the same figure twice in a sentence — "we had 2,215 … licensed beds
+   * (2,215 … on a pro forma basis)" — and both are the same claim, so both get
+   * marked rather than the matcher picking one and flagging itself uncertain.
+   * Fuzzier windows (a trimmed context, a table row's character span) keep the
+   * first hit and stay flagged, because there every occurrence is a guess.
+   */
+  const withinCtx = (cs, ce, strategy, markAll = false) => {
     const hits = targetHits(cs, ce);
     if (hits.length === 0) return null;
+    const spans = (markAll ? hits : [hits[0]]).map((h) => [h, h + rawQ.length]);
     return {
       start: hits[0],
       end: hits[0] + rawQ.length,
       strategy,
-      ambiguous: hits.length > 1,
+      // Marking every occurrence is not a guess, so it is not ambiguous.
+      ambiguous: markAll ? false : hits.length > 1,
+      spans,
       ctxStart: cs,
       ctxEnd: ce,
     };
@@ -210,6 +279,10 @@ function locateSpan(fact, P, mode) {
       if (targetCell >= 0) offsetInCell = q(cells[targetCell]).indexOf(rawQ);
     }
     if (targetCell < 0) return null; // raw_text isn't in its own row: don't guess
+
+    // Positional resolution first — it proves the row before marking anything.
+    const byOrdinal = tableOrdinal(cells, rawQ, targetCell, P, mode, N, q);
+    if (byOrdinal) return byOrdinal;
 
     for (let drop = 0; drop <= Math.max(0, cells.length - (targetCell + 1)); drop++) {
       const use = cells.slice(0, cells.length - drop);
@@ -263,7 +336,8 @@ function locateSpan(fact, P, mode) {
   if (ctxQ) {
     const ctxHits = allIndexesOf(N.norm, ctxQ);
     if (ctxHits.length) {
-      const hit = withinCtx(ctxHits[0], ctxHits[0] + ctxQ.length, 'context');
+      const hit = withinCtx(ctxHits[0], ctxHits[0] + ctxQ.length, 'context', true);
+      // The sentence itself appearing twice on the page is still a guess.
       if (hit) return { ...hit, ambiguous: hit.ambiguous || ctxHits.length > 1 };
     }
 
