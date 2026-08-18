@@ -94,7 +94,34 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .pageskeleton { display: grid; place-items: center; color: var(--faint); font-size: 12px; }
 
-.marklayer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* ── selectable text layer (pdf.js) ────────────────────────────────────── */
+.textlayer {
+  position: absolute; inset: 0; overflow: hidden;
+  line-height: 1; text-size-adjust: none;
+  forced-color-adjust: none; transform-origin: 0 0;
+  z-index: 1; cursor: text;
+}
+.textlayer :is(span, br) {
+  color: transparent; position: absolute; white-space: pre;
+  cursor: text; transform-origin: 0 0;
+}
+.textlayer span.markedContent { top: 0; height: 0; }
+.textlayer ::selection { background: rgba(37, 99, 235, .28); }
+.textlayer br::selection { background: transparent; }
+.textlayer .endOfContent {
+  position: absolute; inset: 100% 0 0; display: block;
+  cursor: default; user-select: none;
+}
+.textlayer.selecting .endOfContent { top: 0; }
+
+/* Marks sit above the text but only capture clicks on their own strokes,
+   so dragging across the page still selects text. */
+.marklayer {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  overflow: visible; z-index: 2; pointer-events: none;
+}
+.mark .hit, .mark .ink { pointer-events: stroke; }
+.mark .glow { pointer-events: none; }
 .mark { cursor: pointer; }
 .mark .hit { stroke: transparent; fill: none; stroke-width: 12; }
 .mark .ink {

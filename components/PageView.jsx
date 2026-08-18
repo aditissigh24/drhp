@@ -10,6 +10,7 @@ const PAGE_H = 841.92;
 export default function PageView({ pdf, pageNum, scale, groups, selectedId, onSelect, registerRef }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
+  const textRef = useRef(null);
   const [near, setNear] = useState(false);
   const [dims, setDims] = useState({ w: PAGE_W * scale, h: PAGE_H * scale });
 
@@ -53,6 +54,20 @@ export default function PageView({ pdf, pageNum, scale, groups, selectedId, onSe
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       task = page.render({ canvasContext: ctx, viewport });
       try { await task.promise; } catch { /* superseded by a newer render */ }
+      if (cancelled) return;
+
+      // Selectable text: pdf.js positions transparent spans over the glyphs.
+      const container = textRef.current;
+      if (container) {
+        container.replaceChildren();
+        const { TextLayer } = await import('pdfjs-dist');
+        const textLayer = new TextLayer({
+          textContentSource: await page.getTextContent(),
+          container,
+          viewport,
+        });
+        await textLayer.render();
+      }
     })();
 
     return () => { cancelled = true; task?.cancel?.(); };
@@ -67,7 +82,10 @@ export default function PageView({ pdf, pageNum, scale, groups, selectedId, onSe
     >
       <div className="pagelabel">Page {pageNum}</div>
       {near ? (
-        <canvas ref={canvasRef} />
+        <>
+          <canvas ref={canvasRef} />
+          <div className="textlayer" ref={textRef} />
+        </>
       ) : (
         <div className="pageskeleton" style={{ width: '100%', height: '100%' }}>{pageNum}</div>
       )}
