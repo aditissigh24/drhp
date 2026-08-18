@@ -1,0 +1,13 @@
+import { chromium } from 'playwright-core';
+import { readdirSync } from 'node:fs';
+const base = `${process.env.HOME}/Library/Caches/ms-playwright`;
+const dir = readdirSync(base).filter(d => d.startsWith('chromium-')).sort().pop();
+const browser = await chromium.launch({ executablePath: `${base}/${dir}/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing` });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+const errs = [];
+page.on('pageerror', e => errs.push(e.message));
+await page.goto(process.argv[3] || 'http://localhost:5180/', { waitUntil: 'networkidle' });
+await page.waitForTimeout(7000);
+await page.screenshot({ path: process.argv[2] || 'shot.png' });
+console.log('marks:', await page.locator('.mark').count(), '| cards:', await page.locator('.card').count(), '| errors:', errs);
+await browser.close();
