@@ -39,7 +39,7 @@ function findFile(names, dirs) {
 
 const PDF = findFile(['Registration_24032026122414_MHEL_DRHP.pdf'], SEARCH_DIRS);
 const CACHE = path.join(HERE, 'cache');
-const FACTS = findFile(['manipal_drhp_our_business_facts.json'], SEARCH_DIRS);
+const FACTS = findFile(['manipal_verification_report.json'], SEARCH_DIRS);
 
 const DPI = 400;
 const PT_PER_PX = 72 / DPI;
@@ -52,7 +52,7 @@ const args = process.argv.slice(2);
 /** Pages that actually contain a bitmap, per poppler. */
 function pagesWithImages() {
   const pageNums = [...new Set(
-    JSON.parse(readFileSync(FACTS, 'utf8')).facts.map((f) => f.page_number),
+    JSON.parse(readFileSync(FACTS, 'utf8')).items.map((f) => f.page_number),
   )].sort((a, b) => a - b);
   return pageNums.filter((p) => {
     const out = execFileSync('pdfimages', ['-list', '-f', String(p), '-l', String(p), PDF], { encoding: 'utf8' });

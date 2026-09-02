@@ -48,9 +48,12 @@ const KEEP_LOOSE = /[a-z0-9%₹]/;
 const isDropped = (ch, mode) =>
   mode === 'loose' ? !KEEP_LOOSE.test(ch) : /\s/.test(ch);
 
-// The extractor sometimes carries markdown emphasis into raw_text
-// (e.g. "on a *pro forma* basis"), which never appears in the PDF.
-const stripMarkdown = (s) => (s || '').replace(/[*_`]+/g, '');
+// The extractor carries its own markup into raw_text and context_sentence —
+// markdown emphasis ("on a *pro forma* basis") and HTML from table cells
+// ("28.8<br>Karnataka: #4", "FY24<sup>(1)</sup>"). None of it exists in the
+// PDF, and a literal "br" in the query is enough to lose the match entirely.
+const stripMarkdown = (s) =>
+  (s || '').replace(/<[^>]{1,16}>/g, ' ').replace(/[*_`]+/g, '');
 
 /** Fold + lowercase + drop noise characters, keeping an index map. */
 export function normalize(raw, mode = 'strict') {
@@ -164,6 +167,55 @@ function tableOrdinal(cells, rawQ, targetCell, P, mode, N, q) {
     }
   }
   return null;
+}
+
+/**
+ * Last resort for table rows whose cells exist on the page but nowhere near
+ * each other in reading order.
+ *
+ * Infographics — a bed-expansion bar chart, a regional map with callouts — are
+ * emitted by the extractor as tidy markdown rows, but on the page the figures
+ * float above their axis labels and the columns share no baseline. Adjacency
+ * (table-row) and baseline walking (table-ordinal, table-line) both fail.
+ *
+ * So fall back to *spatial* corroboration: score each occurrence of the target
+ * by how many of the row's other cells appear near it on the page, and demand
+ * a clear winner. Two independent corroborating cells is the floor — one is
+ * coincidence on a page dense with numbers.
+ */
+function tableProximity(cells, rawQ, targetCell, P, mode, N, q, targetHits) {
+  const others = cells
+    .filter((_, i) => i !== targetCell)
+    .map((c) => q(c))
+    .filter((t) => t.length >= 2);
+  if (others.length < 2) return null;
+
+  const candidates = targetHits(0, Infinity)
+    .map((h) => ({ h, g: baselineAt(h, P, mode, N) }))
+    .filter((c) => c.g);
+  if (!candidates.length) return null;
+
+  // Resolve each supporting cell's positions once, not per candidate.
+  const support = others
+    .map((t) => allIndexesOf(N.norm, t).map((o) => baselineAt(o, P, mode, N)).filter(Boolean))
+    .filter((ps) => ps.length);
+  if (support.length < 2) return null;
+
+  const RADIUS = 180; // PDF points — roughly a quarter page, one chart cluster
+  const scored = candidates.map(({ h, g }) => ({
+    h,
+    score: support.filter((ps) =>
+      ps.some((p) => Math.hypot(p.x - g.x, p.y - g.y) <= RADIUS)).length,
+  })).sort((a, b) => b.score - a.score);
+
+  const [best, runnerUp] = scored;
+  if (!best || best.score < 2) return null;
+  // A tie means the page repeats the whole cluster; marking either is a guess.
+  if (runnerUp && runnerUp.score === best.score) return null;
+  return {
+    start: best.h, end: best.h + rawQ.length,
+    strategy: 'table-proximity', ambiguous: false,
+  };
 }
 
 /**
@@ -329,6 +381,10 @@ function locateSpan(fact, P, mode) {
         }
       }
     }
+
+    // Cells are on the page but not in any row-like arrangement.
+    const byProximity = tableProximity(cells, rawQ, targetCell, P, mode, N, q, targetHits);
+    if (byProximity) return byProximity;
   }
 
   // ---- Strategy 2: context sentence, then raw_text inside it -------------
@@ -450,6 +506,3 @@ export function rangeToRects(hit, P, mode = 'strict') {
     h: l.h,
   }));
 }
-
-/** Underline plain claims, circle up anything carrying a numeric value. */
-export const markShape = (fact) => (fact.value === null || fact.value === undefined ? 'underline' : 'circle');

@@ -4,12 +4,10 @@
   --border: #e2e5ea;
   --border-strong: #cfd4dc;
   --text: #16181d;
-  --muted: #6b7280;
-  --faint: #98a1ae;
+  --muted: #4b5563;
+  --faint: #6b7280;
   --accent: #2563eb;
   --accent-soft: #eaf0fe;
-  --circle: #d6323a;
-  --underline: #6d3fd4;
   --warn: #b45309;
   --warn-soft: #fef4e6;
   --radius: 10px;
@@ -82,6 +80,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .main { display: flex; flex: 1; min-height: 0; }
 
+/* ── document column ───────────────────────────────────────────────────── */
+.doccol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* Toolbar for the document itself, sitting between the global bar and the
+   first page so the controls read as belonging to the viewer. */
+.doctools {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  flex: none; padding: 8px 18px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.doctools .divider { width: 1px; height: 20px; background: var(--border); flex: none; }
+
 /* ── document pane ─────────────────────────────────────────────────────── */
 .docpane { flex: 1; min-width: 0; overflow: auto; padding: 22px 0 60px; scroll-behavior: smooth; }
 .pagestack { display: flex; flex-direction: column; align-items: center; gap: 20px; }
@@ -120,25 +130,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   overflow: visible; z-index: 2; pointer-events: none;
 }
-.mark .hit, .mark .ink { pointer-events: stroke; }
-.mark .glow { pointer-events: none; }
 .mark { cursor: pointer; }
-.mark .hit { stroke: transparent; fill: none; stroke-width: 12; }
-.mark .ink {
-  fill: none; stroke-linecap: round; stroke-linejoin: round;
-  vector-effect: non-scaling-stroke; transition: stroke-width .12s ease, opacity .12s ease;
-}
-.mark.circle .ink { stroke: var(--circle); stroke-width: 1.6; opacity: .78; }
-.mark.underline .ink { stroke: var(--underline); stroke-width: 1.5; opacity: .72; }
-.mark.ambiguous .ink { stroke-dasharray: 4 3; opacity: .6; }
-.mark:hover .ink { stroke-width: 2.6; opacity: 1; }
-.mark.selected .ink { stroke: var(--accent); stroke-width: 2.8; opacity: 1; }
-.mark .glow { fill: var(--accent); opacity: 0; transition: opacity .18s ease; }
-.mark.selected .glow { opacity: .12; }
+.mark .tint { pointer-events: all; transition: opacity .12s ease; }
 
+/* Verification tones. Values mirror lib/status.mjs — that file names them,
+   this one paints them; nothing else may hard-code a status colour. */
+.tone-green  { --ink: #16a34a; --wash: rgba(22, 163, 74, .20);   --soft: #f2fbf5; }
+.tone-blue   { --ink: #2563eb; --wash: rgba(37, 99, 235, .18);   --soft: #f3f7fe; }
+.tone-amber  { --ink: #ca8a04; --wash: rgba(250, 204, 21, .34);  --soft: #fefce8; }
+.tone-red    { --ink: #dc2626; --wash: rgba(220, 38, 38, .18);   --soft: #fdf4f4; }
+.tone-slate  { --ink: #64748b; --wash: rgba(100, 116, 139, .18); --soft: #f6f7f9; }
+.tone-grey   { --ink: #9ca3af; --wash: rgba(156, 163, 175, .16); --soft: #fafafa; }
+
+.mark .tint {
+  fill: var(--wash);
+  stroke: var(--ink); stroke-width: .5; stroke-opacity: .45;
+  vector-effect: non-scaling-stroke;
+}
+/* 63% of claims are out-of-scope. At full strength they bury the ~250 items
+   that actually need a human, so they sit back until asked for. */
+.mark.tone-grey .tint { fill-opacity: .5; stroke-opacity: .2; }
+
+/* Matcher uncertainty is a different axis from the verdict, so it changes the
+   outline, never the colour. */
+.mark.ambiguous .tint { stroke-dasharray: 3 2.5; stroke-opacity: .9; stroke-width: .9; }
+
+.mark:hover .tint { fill-opacity: .85; stroke-opacity: .8; }
+.mark.selected .tint {
+  fill: var(--wash); fill-opacity: 1;
+  stroke: var(--ink); stroke-width: 1.4; stroke-opacity: 1;
+}
 /* ── review panel ──────────────────────────────────────────────────────── */
 .panel {
-  width: 430px; flex: none; background: var(--panel);
+  width: 645px; flex: none; background: var(--panel);
   border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0;
 }
 .panel-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); flex: none; }
@@ -166,28 +190,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .empty { color: var(--faint); text-align: center; padding: 40px 20px; font-size: 13px; }
 
 .card {
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 11px 13px 10px; margin-bottom: 9px; background: var(--panel);
+  border: 1px solid var(--soft, var(--border)); border-radius: var(--radius);
+  padding: 11px 13px 10px; margin-bottom: 9px;
+  background: var(--soft, var(--panel));
   transition: border-color .12s ease, box-shadow .12s ease;
 }
-.card:hover { border-color: var(--border-strong); }
-.card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.card:hover { border-color: var(--ink, var(--border-strong)); }
+/* Selection is the card's own verdict colour at full strength, so the list
+   never needs a second colour language to say "this one". */
+.card.selected {
+  border-color: var(--ink, var(--accent));
+  box-shadow: 0 0 0 2px var(--wash, var(--accent-soft));
+}
 .card.dismissed { opacity: .45; }
 
 .card-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.glyph {
-  flex: none; width: 20px; height: 20px; display: grid; place-items: center;
-  font-size: 11px; font-weight: 700;
-}
-.glyph.circle { color: var(--circle); border: 1.5px solid currentColor; border-radius: 50%; }
-.glyph.underline { color: var(--underline); border-bottom: 2px solid currentColor; border-radius: 1px; height: 15px; }
-
 .val {
   font-weight: 640; letter-spacing: -.01em; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto;
 }
-.pageref { color: var(--muted); font-size: 12.5px; white-space: nowrap; flex: none; }
-.pageref a { color: var(--accent); text-decoration: none; }
+.pageref {
+  border: 0; background: none; padding: 0; margin: 0;
+  color: var(--text); font-size: 12.5px; white-space: nowrap; flex: none;
+}
+.pageref:hover { text-decoration: underline; }
 .tag {
   margin-left: auto; flex: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; padding: 2.5px 7px; border-radius: 5px;
   background: #f2f4f7; color: var(--muted); white-space: nowrap;
@@ -200,11 +226,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .quote {
   margin-top: 8px; padding: 7px 10px; border-left: 2.5px solid #d9e2f5;
-  background: #f7f9fc; border-radius: 0 6px 6px 0;
+  background: #fff; border-radius: 0 6px 6px 0;
   font-size: 12.5px; line-height: 1.5; color: #3c4453;
   max-height: 78px; overflow: hidden;
 }
-.quote mark { background: #fde68a; color: inherit; padding: 0 1px; border-radius: 2px; }
+.quote mark { background: #fef08a; color: inherit; padding: 0 1px; border-radius: 2px; }
 
 .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
 .linkbtn {
@@ -213,21 +239,266 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .linkbtn:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
 .linkbtn:disabled { opacity: .45; cursor: not-allowed; }
-.linkbtn.primary { color: var(--accent); border-color: #c7d7fb; background: #f7faff; }
+.linkbtn.primary { color: var(--accent); border-color: #c7d7fb; background: #fff; }
 
 .loading { display: grid; place-items: center; height: 100vh; color: var(--muted); gap: 10px; }
 
 /* ── legend ────────────────────────────────────────────────────────────── */
-.legend {
-  display: flex; align-items: center; gap: 14px;
-  padding: 4px 12px; border-right: 1px solid var(--border);
-}
+.legend { display: flex; align-items: center; gap: 6px; padding: 4px 2px; }
 .legend-item {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; color: var(--muted); white-space: nowrap; cursor: help;
+  display: inline-flex; align-items: center;
+  font-size: 11.5px; white-space: nowrap; cursor: help;
+  padding: 3px 10px; border-radius: 20px;
+  background: var(--soft); color: var(--ink); font-weight: 550;
+  border: 1px solid var(--wash);
 }
-.legend svg { width: 26px; height: 13px; flex: none; overflow: visible; }
-.legend .ink { fill: none; stroke-linecap: round; }
-.legend .ink.circle { stroke: var(--circle); stroke-width: 1.4; }
-.legend .ink.underline { stroke: var(--underline); stroke-width: 1.5; }
-.legend .ink.dash { stroke-dasharray: 3.5 2.5; opacity: .75; }
+/* Grey-on-grey is unreadable at pill size; borrow the body text colour. */
+.legend-item.tone-grey { color: var(--muted); }
+
+/* ── legend swatches (status tones) ────────────────────────────────────── */
+
+/* ── card status treatment ─────────────────────────────────────────────── */
+.card .dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--ink); box-shadow: 0 0 0 3px var(--wash);
+}
+.card .tag.status { background: var(--wash); color: var(--ink); border-color: transparent; font-weight: 600; }
+.card.tone-grey .tag.status { color: var(--muted); }
+
+.card-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+
+/* ── proof block ───────────────────────────────────────────────────────── */
+.proof { margin-top: 9px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.facing { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+.facing > div { display: flex; align-items: baseline; gap: 6px; }
+.facing .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); }
+.facing .v { font-weight: 650; font-variant-numeric: tabular-nums; }
+.facing .v.alt { color: var(--ink); }
+.facing .cause {
+  font-size: 11px; padding: 1px 7px; border-radius: 20px;
+  background: var(--wash); color: var(--ink); text-transform: capitalize;
+}
+.why { margin: 0 0 6px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.why.muted { color: var(--faint); font-style: italic; }
+
+.passage {
+  margin-top: 7px; padding: 8px 10px; border-radius: 8px;
+  background: #fff; border: 1px solid var(--border);
+}
+.passage-src {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--faint); margin-bottom: 5px;
+}
+.passage p { margin: 0 0 5px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.passage p:last-child { margin-bottom: 0; }
+.passage-table { overflow-x: auto; }
+.passage-table table { border-collapse: collapse; font-size: 11.5px; min-width: 100%; }
+.passage-table th, .passage-table td {
+  border: 1px solid var(--border); padding: 3px 7px; text-align: left;
+  color: var(--muted); white-space: pre-line; vertical-align: top;
+}
+.passage-table th { background: #eef0f3; color: var(--text); font-weight: 600; }
+
+/* ── triage tallies ────────────────────────────────────────────────────── */
+.tally .t-action .n { color: #dc2626; }
+.tally .t-review .n { color: #d97706; }
+.tally .t-confirmed .n { color: #16a34a; }
+
+/* ── filtered-out marks ────────────────────────────────────────────────── */
+/* Faded, never unmounted: a mark that disappears takes its click target with
+   it, and the reader loses the ability to ask about a figure they can see. */
+.mark.dimmed .tint { fill-opacity: .18; stroke-opacity: .12; }
+.mark.dimmed:hover .tint { fill-opacity: .7; stroke-opacity: .6; }
+
+/* ── check bar ─────────────────────────────────────────────────────────── */
+.checkbar {
+  display: flex; align-items: center; gap: 18px; flex: none;
+  padding: 9px 18px; background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.checkchips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.checkchip {
+  border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  border-radius: 8px; padding: 4px 10px; font-size: 11.25px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.checkchip .c {
+  font-variant-numeric: tabular-nums; font-weight: 650;
+  color: var(--ink, var(--text));
+}
+/* Outline and label carry the status colour; the fill stays white so a row of
+   eight chips does not read as eight coloured blocks competing with the marks
+   on the page beside them. */
+.checkchip[class*="tone-"] { border-color: var(--ink); color: var(--ink); }
+.checkchip:hover:not(:disabled) { border-color: var(--border-strong); }
+.checkchip[class*="tone-"]:hover:not(:disabled) { border-color: var(--ink); }
+/* Active state cannot use fill, so it doubles the outline and weights the text. */
+.checkchip.on {
+  border-color: var(--ink, var(--accent));
+  color: var(--ink, var(--accent));
+  background: var(--panel);
+  font-weight: 650;
+  box-shadow: 0 0 0 1px var(--ink, var(--accent));
+}
+.checkchip.off { opacity: .5; cursor: not-allowed; }
+.checkchip.off .c {
+  font-size: 10px; font-weight: 500; color: var(--faint);
+  font-style: italic; text-transform: none;
+}
+
+.checkright { margin-left: auto; display: flex; align-items: center; gap: 22px; flex: none; }
+.typesel { display: inline-flex; align-items: center; gap: 8px; font-size: 11.25px; color: var(--muted); }
+.typesel select {
+  font: inherit; font-size: 11.25px; padding: 4px 7px; color: var(--text);
+  border: 1px solid var(--border); border-radius: 7px; background: var(--panel);
+}
+
+.completion { min-width: 232px; }
+.completion-lbl { font-size: 11px; color: var(--faint); margin-bottom: 3px; }
+.completion-row { display: flex; align-items: center; gap: 8px; }
+.completion .pct { font-size: 13px; font-weight: 660; font-variant-numeric: tabular-nums; }
+.completion .bar {
+  flex: 1; height: 6px; border-radius: 4px; background: #e8ebf0; overflow: hidden; min-width: 60px;
+}
+.completion .bar > span { display: block; height: 100%; border-radius: 4px; background: #16a34a; }
+.completion .of { font-size: 11px; color: var(--faint); white-space: nowrap; }
+
+/* ── top bar actions ───────────────────────────────────────────────────── */
+.btn {
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  border-radius: 8px; padding: 7px 13px; font-size: 12.5px; white-space: nowrap;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 550; }
+.btn.primary:hover { background: #1d4fd8; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 11px; font-weight: 650;
+  background: #00285B; color: #fff; letter-spacing: .02em;
+}
+
+.showing { margin-top: 10px; font-size: 12px; color: var(--faint); }
+.showing b { color: var(--muted); font-weight: 600; }
+
+/* Evidence tables carry long CRISIL prose cells and can run hundreds of pixels
+   tall. Cap them and let the block scroll rather than pushing the card actions
+   off-screen. */
+.passage { max-height: 260px; overflow: auto; }
+
+/* ── review panel head ─────────────────────────────────────────────────── */
+.panel-title { font-size: 14px; font-weight: 650; letter-spacing: -.01em; }
+.panel-title .n {
+  margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--muted);
+  background: #f2f4f7; border-radius: 20px; padding: 2px 9px;
+  font-variant-numeric: tabular-nums;
+}
+.panel-headrow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sortsel { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.sortsel select {
+  font: inherit; font-size: 12.5px; padding: 5px 8px; color: var(--text);
+  border: 1px solid var(--border); border-radius: 7px; background: var(--panel);
+}
+
+.pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+/* Same treatment as the check chips: the status colour lives in the outline
+   and the text, never in a fill. */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--ink, var(--muted)); white-space: nowrap;
+  border: 1px solid var(--ink, var(--border)); border-radius: 8px;
+  padding: 5px 10px; background: var(--panel);
+}
+.pill::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink); flex: none;
+}
+.pill b { font-size: 13px; font-weight: 680; color: var(--ink, var(--text)); font-variant-numeric: tabular-nums; }
+
+/* ── cards ─────────────────────────────────────────────────────────────── */
+.card .idx {
+  flex: none; font-size: 12px; color: var(--faint);
+  font-variant-numeric: tabular-nums; min-width: 20px;
+}
+.card-meta {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
+  font-size: 11px; color: var(--faint); line-height: 1.5;
+}
+.card-flags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.card-flags:empty { display: none; }
+.card-flags .tag {
+  margin-left: 0; background: var(--panel);
+  border: 1px solid var(--border); color: var(--muted);
+}
+.card-flags .tag.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.card-flags .tag.ocr { background: var(--panel); color: #3557b7; border-color: #c7d7fb; }
+
+.passage-hint {
+  margin-top: 6px; font-size: 11.5px; color: var(--accent);
+}
+
+/* Only the selected card shows its full evidence, so quotes stay uncapped
+   there and clipped everywhere else. */
+.card.selected .quote { max-height: none; }
+
+/* ── pager ─────────────────────────────────────────────────────────────── */
+.pager {
+  flex: none; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 9px 14px; border-top: 1px solid var(--border); background: var(--panel);
+}
+.pagebtn {
+  min-width: 27px; height: 27px; padding: 0 7px;
+  border: 1px solid transparent; background: transparent; color: var(--muted);
+  border-radius: 7px; font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.pagebtn:hover:not(:disabled):not(.on) { background: #f2f4f7; color: var(--text); }
+.pagebtn.on { background: var(--accent-soft); border-color: #c7d7fb; color: var(--accent); font-weight: 650; }
+.pagebtn:disabled { opacity: .35; cursor: not-allowed; }
+.pager .gap { color: var(--faint); padding: 0 2px; }
+.pager .showing { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+
+/* ── focus mode ────────────────────────────────────────────────────────── */
+/* Selecting anything pushes every other mark back, so the one under
+   discussion is unmistakable on a page carrying 50+ marks. Clicking bare
+   page clears it and everything returns to full strength. */
+.mark.unfocused .tint { fill-opacity: .38; stroke-opacity: .22; }
+.mark.unfocused.dimmed .tint { fill-opacity: .14; stroke-opacity: .08; }
+.mark.unfocused:hover .tint { fill-opacity: .95; stroke-opacity: .75; }
+
+/* No ring: everything else receding is already the focus signal, and a ring on
+   top of that is one cue too many. */
+.mark.selected .tint {
+  fill-opacity: 1; stroke-width: 1; stroke-opacity: .9;
+}
+
+/* ── source peek (CRISIL report) ───────────────────────────────────────── */
+.main { position: relative; }
+.peek {
+  position: absolute; inset: 0 0 0 auto; width: 645px; z-index: 30;
+  background: var(--panel); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 24px rgba(16, 24, 40, .08);
+}
+.peek-head {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
+}
+.peek-title { font-size: 13.5px; font-weight: 650; }
+.peek-sub { margin-left: 8px; font-weight: 500; color: var(--muted); }
+.peek-head .linkbtn { margin-left: auto; }
+.peek-note {
+  flex: none; margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--warn-soft); color: var(--warn); font-size: 12px; line-height: 1.5;
+}
+.peek-note.err { background: #fdf4f4; color: #b42318; }
+.peek-body { flex: 1; overflow: auto; padding: 12px; }
+.peek-page { position: relative; margin: 0 auto; background: #fff; box-shadow: var(--shadow); }
+.peek-page canvas { display: block; }
+.peek-marks {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  overflow: visible; pointer-events: none;
+}
+.peek-marks rect { fill: rgba(250, 204, 21, .38); stroke: #ca8a04; stroke-width: .6; }
+.peek-loading { padding: 40px; text-align: center; color: var(--faint); font-size: 12.5px; }
+
+.passage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+.passage-head .passage-src { margin-bottom: 0; }
+.linkbtn.tiny { margin-left: auto; padding: 3px 8px; font-size: 11px; }
