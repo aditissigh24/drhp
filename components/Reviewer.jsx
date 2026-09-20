@@ -6,9 +6,10 @@ import FactPanel from './FactPanel';
 import CheckBar from './CheckBar';
 import ModusLogo from './ModusLogo';
 import SourcePeek from './SourcePeek';
-import { STATUS_ORDER, statusOf, bucketOf } from '@/lib/status.mjs';
+import { STATUS_ORDER, statusOf, bucketOf, severityOf, SEVERITIES } from '@/lib/status.mjs';
 import { unitFamily } from '@/lib/units.mjs';
-import { buildMvc, downloadCsv } from '@/lib/export.mjs';
+import { buildMvc, buildExceptions, downloadCsv } from '@/lib/export.mjs';
+import { loadReview, saveDecision, getReviewer, setReviewer } from '@/lib/review.mjs';
 
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2.4;
@@ -20,6 +21,7 @@ const PAGE_SIZE = 20;
  * Within a bucket, document order is preserved so the list tracks the PDF.
  */
 const SORTS = [
+  { key: 'severity', label: 'Severity first' },
   { key: 'document', label: 'Document order' },
   { key: 'action', label: 'Needs Action first' },
   { key: 'review', label: 'Needs Review first' },
@@ -27,20 +29,27 @@ const SORTS = [
 ];
 
 /**
- * The filters the report can actually answer. Derived from the verification
- * vocabulary rather than hard-coded, so a status the backend adds later gets a
- * chip without anyone editing this list.
+ * Filters, split by *severity* as well as verdict (`circle_plan.md` §6).
+ *
+ * A single "External Mismatches 72" chip told the reader there were 72
+ * contradictions. There are 27. The other 45 are the same figure measured on a
+ * different date or basis — real findings, but not the company misstating
+ * anything. The counts decompose exactly:
+ *     All Errors 250 = Unbacked 176 + Unexplained 27  (high)
+ *                    + Timing/basis/vintage 47        (medium)
+ * with rounding-tolerance cases auto-resolved out of the error count entirely.
  */
+const sev = (c) => severityOf(c).key;
 const FILTERS = [
-  { key: 'errors', label: 'All Errors', tone: 'red', statuses: ['discrepancy', 'unbacked', 'vintage_unclear'], blurb: 'Everything the engine could not confirm.' },
-  { key: 'discrepancy', label: 'External Mismatches', tone: 'amber', statuses: ['discrepancy'], blurb: 'Found in the CRISIL report, but the numbers conflict.' },
-  { key: 'unbacked', label: 'Unbacked Claims', tone: 'red', statuses: ['unbacked'], blurb: 'No supporting passage found in the uploaded sources.' },
-  { key: 'vintage_unclear', label: 'Vintage Unclear', tone: 'slate', statuses: ['vintage_unclear'], blurb: 'The source is silent on this period.' },
-  { key: 'confirmed', label: 'Auto Confirmed', tone: 'green', statuses: ['exact', 'derivable'], blurb: 'Value and context match the source.' },
-  { key: 'out_of_scope', label: 'Not in scope', tone: 'grey', statuses: ['out_of_scope'], blurb: 'Nothing in the uploaded sources speaks to this figure.' },
-  { key: 'human', label: 'Needs human review', tone: 'amber', statuses: null, blurb: "The engine's own triage flag, not our derivation from status." },
-  { key: 'unplaced', label: 'Not located', statuses: null, blurb: 'The matcher could not anchor this claim to the page.' },
-  { key: 'all', label: 'All claims', statuses: null, blurb: 'Every claim in the report.' },
+  { key: 'errors', label: 'All Errors', tone: 'red', test: (c) => sev(c) === 'high' || sev(c) === 'medium', blurb: 'Everything still open: high and medium severity. Excludes rounding cases auto-resolved under §6.' },
+  { key: 'unbacked', label: 'Unbacked Claims', tone: 'red', test: (c) => c.status === 'unbacked', blurb: 'No supporting passage found in the uploaded sources. High severity.' },
+  { key: 'unexplained', label: 'Unexplained Mismatches', tone: 'red', test: (c) => c.status === 'discrepancy' && c.rootCause === 'unexplained', blurb: 'Numbers conflict and the engine cannot account for why. The ones that matter most.' },
+  { key: 'reconcilable', label: 'Timing & Basis', tone: 'amber', test: (c) => sev(c) === 'medium', blurb: 'Numbers differ for a stated reason — different period, basis or vintage. Usually not a misstatement.' },
+  { key: 'resolved', label: 'Auto-resolved', tone: 'green', test: (c) => sev(c) === 'resolved', blurb: 'Within rounding tolerance. Recorded and auditable, but not raised as an error.' },
+  { key: 'confirmed', label: 'Auto Confirmed', tone: 'green', test: (c) => bucketOf(c.status) === 'confirmed', blurb: 'Value and context match the source.' },
+  { key: 'out_of_scope', label: 'Not in scope', tone: 'grey', test: (c) => c.status === 'out_of_scope', blurb: 'Nothing in the uploaded sources speaks to this figure. No check was attempted.' },
+  { key: 'human', label: 'Needs human review', tone: 'amber', test: (c) => c.needsHumanReview, blurb: "The engine's own triage flag, not our derivation from status." },
+  { key: 'all', label: 'All claims', test: () => true, blurb: 'Every claim in the report.' },
 ];
 
 /** What each colour means. Lives above the document so it costs the cards no height. */
@@ -74,6 +83,8 @@ export default function Reviewer() {
   const [dismissed, setDismissed] = useState(() => new Set());
   const [currentPage, setCurrentPage] = useState(null);
   const [peek, setPeek] = useState(null);
+  const [review, setReview] = useState({});
+  const [reviewer, setReviewerName] = useState('');
 
   const docRef = useRef(null);
   const pageEls = useRef(new Map());
@@ -93,6 +104,10 @@ export default function Reviewer() {
           anchors: a.anchors, groups: a.groups, stats: a.stats,
         });
         setCurrentPage(v.pages[0]);
+        // Review state is namespaced by run: a new report must not inherit
+        // sign-offs recorded against renumbered claim ids.
+        setReview(loadReview(v.runId));
+        setReviewerName(getReviewer());
 
         const pdfjs = await import('pdfjs-dist');
         // Served as .js, not .mjs: some CDNs hand back a MIME type for .mjs
@@ -114,11 +129,9 @@ export default function Reviewer() {
 
   // ── filtering ──────────────────────────────────────────────────────────
   const matches = useCallback((c, key) => {
-    if (key === 'all') return true;
     if (key === 'unplaced') return !data.anchors[c.id];
-    if (key === 'human') return c.needsHumanReview;
     const f = FILTERS.find((x) => x.key === key);
-    return f?.statuses ? f.statuses.includes(c.status) : true;
+    return f ? f.test(c) : true;
   }, [data]);
 
   const counts = useMemo(() => {
@@ -149,7 +162,13 @@ export default function Reviewer() {
         .toLowerCase().includes(q);
     });
     if (sort === 'document') return kept;
-    // Stable: only the chosen bucket moves, everything else holds its order.
+    // Stable in every mode: only the chosen group moves, the rest hold order.
+    if (sort === 'severity') {
+      return kept
+        .map((c, i) => ({ c, i }))
+        .sort((a, b) => severityOf(a.c).order - severityOf(b.c).order || a.i - b.i)
+        .map((x) => x.c);
+    }
     return kept
       .map((c, i) => ({ c, i }))
       .sort((a, b) => (bucketOf(a.c.status) === sort ? 0 : 1) - (bucketOf(b.c.status) === sort ? 0 : 1)
@@ -264,6 +283,19 @@ export default function Reviewer() {
   // The CRISIL PDF loads on first open, never at boot (task E6).
   const onOpenSource = useCallback((evidence) => setPeek(evidence), []);
 
+  const onDecide = useCallback((claimId, entry) => {
+    setReview(saveDecision(data.meta.runId, claimId, entry));
+  }, [data]);
+
+  const onClearDecision = useCallback((claimId) => {
+    setReview(saveDecision(data.meta.runId, claimId, null));
+  }, [data]);
+
+  const onReviewerChange = useCallback((name) => {
+    setReviewerName(name);
+    setReviewer(name);
+  }, []);
+
   // Clicking bare page (not a mark) drops focus and brings every mark back to
   // full strength. Marks stopPropagation, so only background clicks land here.
   const clearFocus = useCallback(() => setSelectedId(null), []);
@@ -293,9 +325,18 @@ export default function Reviewer() {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(
       `master-verification-chart_${data.meta.docId}_${stamp}.csv`,
-      buildMvc(data.claims, data.anchors),
+      buildMvc(data.claims, data.anchors, review),
     );
-  }, [data]);
+  }, [data, review]);
+
+  const exportExceptions = useCallback(() => {
+    if (!data) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(
+      `discrepancy-exception-report_${data.meta.docId}_${stamp}.csv`,
+      buildExceptions(data.claims, data.anchors, review),
+    );
+  }, [data, review]);
 
   if (error) return <div className="loading">Could not load: {error}</div>;
   if (!data) return <div className="loading">Loading verification report…</div>;
@@ -314,6 +355,15 @@ export default function Reviewer() {
 
         <div className="spacer" />
 
+        <label className="reviewer" title="Recorded against every decision you make">
+          <span>Reviewer</span>
+          <input
+            value={reviewer}
+            placeholder="your name"
+            onChange={(e) => onReviewerChange(e.target.value)}
+          />
+        </label>
+        <button className="btn" onClick={exportExceptions}>Exception Report</button>
         <button className="btn primary" onClick={exportMvc}>
           Export Master Verification Chart
         </button>
@@ -393,6 +443,10 @@ export default function Reviewer() {
           setListPage={setListPage}
           pageSize={PAGE_SIZE}
           generatedAt={data.meta.generatedAt}
+          review={review}
+          reviewer={reviewer}
+          onDecide={onDecide}
+          onClearDecision={onClearDecision}
           onSelect={viewInDocument}
           onView={viewInDocument}
           onDismiss={onDismiss}

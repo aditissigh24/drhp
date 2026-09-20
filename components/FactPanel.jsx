@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { statusOf } from '@/lib/status.mjs';
+import { statusOf, severityOf } from '@/lib/status.mjs';
 import Passage from './Evidence';
+import ReviewActions from './ReviewActions';
 
 const LABEL = (s) => (s || '').replace(/_/g, ' ');
 const fmtDate = (iso) => {
@@ -69,6 +70,7 @@ function Proof({ claim, expanded, onOpenSource }) {
 function Card({
   claim, anchor, index, selected, dismissed, generatedAt,
   onSelect, onView, onDismiss, onOpenSource,
+  decision, reviewer, onDecide, onClearDecision,
 }) {
   const ref = useRef(null);
   const st = statusOf(claim.status);
@@ -81,11 +83,12 @@ function Card({
 
   const unplaced = !anchor;
   const extracted = fmtDate(generatedAt);
+  const sev = severityOf(claim);
 
   return (
     <div
       ref={ref}
-      className={`card tone-${st.tone}${selected ? ' selected' : ''}${dismissed ? ' dismissed' : ''}`}
+      className={`card tone-${st.tone}${selected ? ' selected' : ''}${dismissed ? ' dismissed' : ''}${decision ? ' decided' : ''}`}
       onClick={() => onSelect(claim.id)}
     >
       <div className="card-top">
@@ -102,6 +105,9 @@ function Card({
           · Page {anchor?.page ?? claim.page}
           {anchor?.line ? ` · Line ${anchor.line}` : ''}
         </button>
+        {sev.key !== 'none' && (
+          <span className={`sev tone-${sev.tone}`} title={sev.blurb}>{sev.label}</span>
+        )}
         <span className="tag status">{st.short}</span>
       </div>
 
@@ -137,6 +143,16 @@ function Card({
         )}
         {claim.unit && <span className="tag">{claim.unit}</span>}
       </div>
+
+      {selected && (
+        <ReviewActions
+          claim={claim}
+          decision={decision}
+          reviewer={reviewer}
+          onDecide={onDecide}
+          onClear={onClearDecision}
+        />
+      )}
 
       <div className="card-foot">
         <button
@@ -181,6 +197,7 @@ export default function FactPanel({
   claims, anchors, query, setQuery, sort, setSort, sorts,
   selectedId, dismissed, onSelect, onView, onDismiss, onOpenSource,
   tallies, totalClaims, listPage, setListPage, pageSize, generatedAt,
+  review, reviewer, onDecide, onClearDecision,
 }) {
   const total = claims.length;
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -232,6 +249,10 @@ export default function FactPanel({
             onView={onView}
             onDismiss={onDismiss}
             onOpenSource={onOpenSource}
+            decision={review[c.id]}
+            reviewer={reviewer}
+            onDecide={onDecide}
+            onClearDecision={onClearDecision}
           />
         ))}
       </div>

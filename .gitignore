@@ -7,3 +7,6 @@ amplify-deploy.zip
 # The served copy in public/ is what the app fetches and what must be committed.
 # This is the same 14 MB file again, and the scripts find it under public/.
 Registration_*.pdf
+*.md
+task.md
+circle_plan.md
