@@ -406,7 +406,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: 11.5px; color: var(--ink, var(--muted)); white-space: nowrap;
   border: 1px solid var(--ink, var(--border)); border-radius: 8px;
   padding: 5px 10px; background: var(--panel);
+  /* A button now, not a span: reset the UA styling the span never carried. */
+  font-family: inherit; cursor: pointer; appearance: none;
+  transition: background .12s ease, box-shadow .12s ease;
 }
+.pill:hover { background: var(--soft, var(--panel)); }
+.pill:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* The active pill fills, the same way a selected check chip does. */
+.pill.on { background: var(--soft, var(--panel)); box-shadow: inset 0 0 0 1px var(--ink); }
 .pill::before {
   content: ''; width: 7px; height: 7px; border-radius: 50%;
   background: var(--ink); flex: none;

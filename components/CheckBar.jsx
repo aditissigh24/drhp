@@ -6,12 +6,10 @@ import { UNIT_FAMILIES } from '@/lib/units.mjs';
  * Check controls: which failures to look at, which kind of number, and how far
  * through the section the review is.
  *
- * The mock carries "Internal Mismatches" and "Math Failures" chips. Those
- * engines did not run in this pipeline, so they are rendered disabled and
- * labelled — not shown with a count of 0. In a tool whose output is evidence of
- * due diligence, "Math Failures 0" reads as "the maths was checked and passed",
- * which would be a false assurance. They light up automatically if the report
- * ever carries them.
+ * The mock also carried disabled "Internal Mismatches" and "Math Failures"
+ * chips, marked "not run" so that a count of 0 could not be misread as "checked
+ * and passed". This report *is* the internal-consistency run, so the first was
+ * describing the thing it sat next to; both are gone rather than greyed out.
  */
 export default function CheckBar({
   filters, filter, setFilter, counts,
@@ -31,12 +29,6 @@ export default function CheckBar({
             {f.label} <span className="c">{counts[f.key] ?? 0}</span>
           </button>
         ))}
-        <button className="checkchip off" disabled title="Internal consistency checking is not part of this run.">
-          Internal Mismatches <span className="c">not run</span>
-        </button>
-        <button className="checkchip off" disabled title="Calculation verification is not part of this run.">
-          Math Failures <span className="c">not run</span>
-        </button>
       </div>
 
       <div className="checkright">

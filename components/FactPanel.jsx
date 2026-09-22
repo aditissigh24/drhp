@@ -200,7 +200,8 @@ function pageList(current, total, max = 10) {
 export default function FactPanel({
   claims, anchors, query, setQuery, sort, setSort, sorts,
   selectedId, dismissed, onSelect, onView, onDismiss, onOpenSource,
-  tallies, totalClaims, listPage, setListPage, pageSize, generatedAt,
+  pills, tallies, filter, setFilter,
+  totalClaims, listPage, setListPage, pageSize, generatedAt,
   review, reviewer, onDecide, onClearDecision,
 }) {
   const total = claims.length;
@@ -224,10 +225,25 @@ export default function FactPanel({
           </label>
         </div>
 
+        {/* Shortcuts into the same filter the chip row drives. Clicking the
+            pill that is already on clears back to every claim, so the pill is
+            a toggle and there is no way to get stuck inside one bucket. */}
         <div className="pills">
-          <span className="pill tone-red"><b>{tallies.action}</b> Needs Action</span>
-          <span className="pill tone-amber"><b>{tallies.review}</b> Needs Review</span>
-          <span className="pill tone-green"><b>{tallies.confirmed}</b> Auto Confirmed</span>
+          {pills.map((p) => {
+            const on = filter === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                className={`pill tone-${p.tone}${on ? ' on' : ''}`}
+                aria-pressed={on}
+                title={on ? `Showing ${p.label} only — click to show all claims` : `Show only ${p.label}`}
+                onClick={() => setFilter(on ? 'all' : p.key)}
+              >
+                <b>{tallies[p.key] ?? 0}</b> {p.label}
+              </button>
+            );
+          })}
         </div>
 
         <input

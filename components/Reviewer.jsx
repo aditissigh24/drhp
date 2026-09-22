@@ -39,16 +39,26 @@ const SORTS = [
  *     All claims 9,053 = Contradictions 237
  *                      + Corroborated 2,981
  *                      + Uncorroborated 5,835
- * `Needs human review` is the engine's own flag and happens to select the same
- * 237 rows as `Contradictions`; it is kept as a separate chip because it is
- * reported independently and may diverge in a later run.
+ * There is no separate `Needs human review` chip: the report sets that flag on
+ * exactly the 237 contradictions and nothing else, so it duplicated the first
+ * chip. It lives on as `needsHumanReview` per claim if the two ever diverge.
  */
 const FILTERS = [
   { key: 'contradiction', label: 'Contradictions', tone: 'red', test: (c) => c.status === 'contradiction', blurb: 'The document states the same figure two different ways. Every one needs a human.' },
   { key: 'corroborated', label: 'Corroborated', tone: 'green', test: (c) => c.status === 'corroborated', blurb: 'Stated more than once in the document, and the values agree.' },
   { key: 'unique', label: 'Uncorroborated', tone: 'amber', test: (c) => c.status === 'unique', blurb: 'Stated only once, so there is nothing in the document to check it against. No check was attempted.' },
-  { key: 'human', label: 'Needs human review', tone: 'red', test: (c) => c.needsHumanReview, blurb: "The engine's own triage flag, not our derivation from status." },
   { key: 'all', label: 'All claims', test: () => true, blurb: 'Every claim in the report.' },
+];
+
+/**
+ * The triage pills above the review list. They are the same three sets as the
+ * chips, in triage language rather than report language, and they drive the
+ * same filter — so a pill reads as a shortcut, not a second control.
+ */
+const PILLS = [
+  { key: 'contradiction', label: 'Needs Action', tone: 'red' },
+  { key: 'unique', label: 'Uncorroborated', tone: 'amber' },
+  { key: 'corroborated', label: 'Auto Confirmed', tone: 'green' },
 ];
 
 /** What each colour means. Lives above the document so it costs the cards no height. */
@@ -81,6 +91,9 @@ export default function Reviewer() {
   const [listPage, setListPage] = useState(0);
   const [dismissed, setDismissed] = useState(() => new Set());
   const [currentPage, setCurrentPage] = useState(null);
+  // What the reader has typed into the page box, held apart from `currentPage`
+  // so scrolling cannot overwrite a half-finished number. null = not editing.
+  const [pageDraft, setPageDraft] = useState(null);
   const [peek, setPeek] = useState(null);
   const [review, setReview] = useState({});
   const [reviewer, setReviewerName] = useState('');
@@ -221,12 +234,18 @@ export default function Reviewer() {
     return by;
   }, [data, dismissed, visibleIds]);
 
+  /**
+   * Pill counts. Keyed by filter so a pill can hand its key straight to
+   * `setFilter`, and counted over live claims only — a dismissed claim is work
+   * the reviewer has already done and should leave the outstanding count.
+   */
   const tallies = useMemo(() => {
-    if (!data) return { action: 0, review: 0, confirmed: 0 };
+    if (!data) return {};
     const live = data.claims.filter((c) => !dismissed.has(c.id));
-    const n = (b) => live.filter((c) => bucketOf(c.status) === b).length;
-    return { action: n('action'), review: n('review'), confirmed: n('confirmed') };
-  }, [data, dismissed]);
+    return Object.fromEntries(
+      PILLS.map((p) => [p.key, live.filter((c) => matches(c, p.key)).length]),
+    );
+  }, [data, dismissed, matches]);
 
   /**
    * Progress through the *checkable* part of the section. Out-of-scope claims
@@ -319,6 +338,31 @@ export default function Reviewer() {
     if (best) setCurrentPage(best.n);
   }, []);
 
+  /**
+   * Jump to the typed page, on Enter or on leaving the box.
+   *
+   * Deliberately not on every keystroke. The box used to scroll as you typed,
+   * which was survivable while the viewer only held pages 227–253 — no single
+   * digit was a page in range, so nothing moved until you had typed all three.
+   * Over a whole document every first digit is a valid page, so the first
+   * keystroke started a smooth scroll, `onScroll` wrote the page it landed on
+   * back into the same state the input renders from, and the rest of the
+   * number was swallowed as you typed it.
+   */
+  const commitPageDraft = useCallback(() => {
+    if (pageDraft === null) return;
+    const n = Number(pageDraft);
+    setPageDraft(null);
+    if (!pageDraft || !Number.isFinite(n)) return;
+    const pages = data?.pages ?? [];
+    if (!pages.length) return;
+    // Clamp rather than ignore: "600" in a 571-page document means the end.
+    const target = Math.min(Math.max(n, pages[0]), pages[pages.length - 1]);
+    if (!pages.includes(target)) return;
+    setCurrentPage(target);
+    scrollToPage(target, 0);
+  }, [pageDraft, data, scrollToPage]);
+
   const exportMvc = useCallback(() => {
     if (!data) return;
     const stamp = new Date().toISOString().slice(0, 10);
@@ -403,11 +447,20 @@ export default function Reviewer() {
 
             <div className="pagebox">
               <input
-                value={currentPage ?? ''}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  setCurrentPage(n);
-                  if (data.pages.includes(n)) scrollToPage(n, 0);
+                // While editing, the box shows exactly what was typed; the rest
+                // of the time it follows the page the reader has scrolled to.
+                value={pageDraft ?? currentPage ?? ''}
+                inputMode="numeric"
+                aria-label={`Page number, 1 to ${lastPage}`}
+                onChange={(e) => setPageDraft(e.target.value.replace(/\D/g, ''))}
+                onFocus={(e) => e.target.select()}
+                onBlur={commitPageDraft}
+                // Neither branch blurs: blur() fires onBlur synchronously with
+                // this render's `pageDraft` still set, which would commit a
+                // second time on Enter and commit the cancelled value on Escape.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitPageDraft(); }
+                  if (e.key === 'Escape') setPageDraft(null);
                 }}
               />
               <span>/ {lastPage}</span>
@@ -456,7 +509,10 @@ export default function Reviewer() {
           onView={viewInDocument}
           onDismiss={onDismiss}
           onOpenSource={data.meta.sourcePdf ? onOpenSource : undefined}
+          pills={PILLS}
           tallies={tallies}
+          filter={filter}
+          setFilter={setFilter}
           totalClaims={data.claims.length}
         />
 
