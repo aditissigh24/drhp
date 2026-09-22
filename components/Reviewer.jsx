@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PageView from './PageView';
 import FactPanel from './FactPanel';
 import CheckBar from './CheckBar';
-import ModusLogo from './ModusLogo';
 import SourcePeek from './SourcePeek';
-import { STATUS_ORDER, statusOf, bucketOf, severityOf, SEVERITIES } from '@/lib/status.mjs';
+import { STATUS_ORDER, statusOf, bucketOf, severityOf } from '@/lib/status.mjs';
 import { unitFamily } from '@/lib/units.mjs';
 import { buildMvc, buildExceptions, downloadCsv } from '@/lib/export.mjs';
 import { loadReview, saveDecision, getReviewer, setReviewer } from '@/lib/review.mjs';
+import { defaultCompany } from '@/app/data/companies';
 
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2.4;
@@ -23,32 +23,31 @@ const PAGE_SIZE = 20;
 const SORTS = [
   { key: 'severity', label: 'Severity first' },
   { key: 'document', label: 'Document order' },
-  { key: 'action', label: 'Needs Action first' },
-  { key: 'review', label: 'Needs Review first' },
-  { key: 'confirmed', label: 'Auto Confirmed first' },
+  { key: 'action', label: 'Contradictions first' },
+  { key: 'confirmed', label: 'Corroborated first' },
+  // `scope`, not `review`: nothing lands in the review bucket under the
+  // internal-consistency vocabulary, so that option hoisted zero claims.
+  { key: 'scope', label: 'Uncorroborated first' },
 ];
 
 /**
- * Filters, split by *severity* as well as verdict (`circle_plan.md` §6).
+ * Filters for the internal-consistency vocabulary.
  *
- * A single "External Mismatches 72" chip told the reader there were 72
- * contradictions. There are 27. The other 45 are the same figure measured on a
- * different date or basis — real findings, but not the company misstating
- * anything. The counts decompose exactly:
- *     All Errors 250 = Unbacked 176 + Unexplained 27  (high)
- *                    + Timing/basis/vintage 47        (medium)
- * with rounding-tolerance cases auto-resolved out of the error count entirely.
+ * The severity split the old chips were built on does not apply here: the
+ * report carries no `root_cause`, so every finding is a plain contradiction.
+ * The counts decompose exactly, with no overlap:
+ *     All claims 9,053 = Contradictions 237
+ *                      + Corroborated 2,981
+ *                      + Uncorroborated 5,835
+ * `Needs human review` is the engine's own flag and happens to select the same
+ * 237 rows as `Contradictions`; it is kept as a separate chip because it is
+ * reported independently and may diverge in a later run.
  */
-const sev = (c) => severityOf(c).key;
 const FILTERS = [
-  { key: 'errors', label: 'All Errors', tone: 'red', test: (c) => sev(c) === 'high' || sev(c) === 'medium', blurb: 'Everything still open: high and medium severity. Excludes rounding cases auto-resolved under §6.' },
-  { key: 'unbacked', label: 'Unbacked Claims', tone: 'red', test: (c) => c.status === 'unbacked', blurb: 'No supporting passage found in the uploaded sources. High severity.' },
-  { key: 'unexplained', label: 'Unexplained Mismatches', tone: 'red', test: (c) => c.status === 'discrepancy' && c.rootCause === 'unexplained', blurb: 'Numbers conflict and the engine cannot account for why. The ones that matter most.' },
-  { key: 'reconcilable', label: 'Timing & Basis', tone: 'amber', test: (c) => sev(c) === 'medium', blurb: 'Numbers differ for a stated reason — different period, basis or vintage. Usually not a misstatement.' },
-  { key: 'resolved', label: 'Auto-resolved', tone: 'green', test: (c) => sev(c) === 'resolved', blurb: 'Within rounding tolerance. Recorded and auditable, but not raised as an error.' },
-  { key: 'confirmed', label: 'Auto Confirmed', tone: 'green', test: (c) => bucketOf(c.status) === 'confirmed', blurb: 'Value and context match the source.' },
-  { key: 'out_of_scope', label: 'Not in scope', tone: 'grey', test: (c) => c.status === 'out_of_scope', blurb: 'Nothing in the uploaded sources speaks to this figure. No check was attempted.' },
-  { key: 'human', label: 'Needs human review', tone: 'amber', test: (c) => c.needsHumanReview, blurb: "The engine's own triage flag, not our derivation from status." },
+  { key: 'contradiction', label: 'Contradictions', tone: 'red', test: (c) => c.status === 'contradiction', blurb: 'The document states the same figure two different ways. Every one needs a human.' },
+  { key: 'corroborated', label: 'Corroborated', tone: 'green', test: (c) => c.status === 'corroborated', blurb: 'Stated more than once in the document, and the values agree.' },
+  { key: 'unique', label: 'Uncorroborated', tone: 'amber', test: (c) => c.status === 'unique', blurb: 'Stated only once, so there is nothing in the document to check it against. No check was attempted.' },
+  { key: 'human', label: 'Needs human review', tone: 'red', test: (c) => c.needsHumanReview, blurb: "The engine's own triage flag, not our derivation from status." },
   { key: 'all', label: 'All claims', test: () => true, blurb: 'Every claim in the report.' },
 ];
 
@@ -280,7 +279,7 @@ export default function Reviewer() {
     }
   }, [data, filter, unitFilter, query, matches]);
 
-  // The CRISIL PDF loads on first open, never at boot (task E6).
+  // The source PDF loads on first open, never at boot (task E6).
   const onOpenSource = useCallback((evidence) => setPeek(evidence), []);
 
   const onDecide = useCallback((claimId, entry) => {
@@ -347,10 +346,16 @@ export default function Reviewer() {
   return (
     <div className="shell">
       <header className="topbar">
-        <ModusLogo />
-        <div className="brand">NSE - Due Diligence</div>
+        {/* The modus ai wordmark and the "NSE - Due Diligence" brand used to sit
+            here, from when this reviewer was the whole application. It now
+            renders inside the app shell, which already carries the wordmark in
+            the sidebar and the product name in the breadcrumb, so both were
+            duplicated. The crumb keeps the company and document context. */}
         <div className="crumb">
-          <b>Manipal Health Enterprises Limited</b> · DRHP · Our Business · pages {firstPage}–{lastPage}
+          {/* app/data/companies.ts is the authority for everything *about* the
+              company; verification.json stays the authority for the run. */}
+          <b>{defaultCompany.legalName}</b> · {defaultCompany.docType} · {defaultCompany.section}
+          {' '}· pages {firstPage}–{lastPage}
         </div>
 
         <div className="spacer" />

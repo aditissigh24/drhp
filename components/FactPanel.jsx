@@ -119,7 +119,11 @@ function Card({
       {/* Real provenance only. The mock shows a confidence score; the report
           carries none, and inventing one in an audit tool is not an option. */}
       <div className="card-meta">
-        <span>Source: {claim.sourceDocId ? 'CRISIL Industry Report' : 'DRHP only'}</span>
+        {/* Every claim carries the document's own id now that corroboration is
+            internal, so the old "which source?" split said CRISIL on all 9,053
+            cards. What still varies is whether anything cross-references it,
+            and the page list below already says that. */}
+        <span>Source: DRHP</span>
         {claim.evidence.length > 0 && (
           <span>· p.{[...new Set(claim.evidence.map((e) => e.page))].join(', ')}</span>
         )}

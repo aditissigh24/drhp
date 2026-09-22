@@ -37,9 +37,18 @@ function findFile(names, dirs) {
   );
 }
 
-const PDF = findFile(['Registration_24032026122414_MHEL_DRHP.pdf'], SEARCH_DIRS);
-const CACHE = path.join(HERE, 'cache');
-const FACTS = findFile(['manipal_verification_report.json'], SEARCH_DIRS);
+const PDF = findFile([
+  'Project Namo_Consolidated DRHP_22.09.2026_V1.pdf',
+  'Registration_24032026122414_MHEL_DRHP.pdf',
+], SEARCH_DIRS);
+const FACTS = findFile([
+  'internal_consistency_report (1).json',
+  'internal_consistency_report.json',
+  'manipal_verification_report.json',
+], SEARCH_DIRS);
+// Scoped by doc_id to match build-anchors: the cache is keyed only by page
+// number, so one document's cache must never answer for another's pages.
+const CACHE = path.join(HERE, 'cache', JSON.parse(readFileSync(FACTS, 'utf8')).doc_id);
 
 const DPI = 400;
 const PT_PER_PX = 72 / DPI;

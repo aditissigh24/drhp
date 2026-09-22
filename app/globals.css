@@ -379,7 +379,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .showing { margin-top: 10px; font-size: 12px; color: var(--faint); }
 .showing b { color: var(--muted); font-weight: 600; }
 
-/* Evidence tables carry long CRISIL prose cells and can run hundreds of pixels
+/* Evidence tables carry long prose cells and can run hundreds of pixels
    tall. Cap them and let the block scroll rather than pushing the card actions
    off-screen. */
 .passage { max-height: 260px; overflow: auto; }
@@ -469,7 +469,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   fill-opacity: 1; stroke-width: 1; stroke-opacity: .9;
 }
 
-/* ── source peek (CRISIL report) ───────────────────────────────────────── */
+/* ── source peek (the DRHP, at the evidence page) ──────────────────────── */
 .main { position: relative; }
 .peek {
   position: absolute; inset: 0 0 0 auto; width: 645px; z-index: 30;

@@ -1,0 +1,364 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* NOTE (NSE port): upstream's unlayered `body { font-family: Inter }` rule is
+   not carried here — it would override the DRHP stylesheet's body font, and
+   app/globals.css must stay the authority for that. The ported shell gets the
+   font on its own roots instead; see app/shell.css. */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --chart-1: 221.2 83.2% 53.3%;
+    --chart-2: 280 65% 60%;
+    --chart-3: 333 71% 51%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 187 72% 42%;
+    --radius: 0.75rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-active: 217.2 91.2% 59.8%;
+    --sidebar-active-foreground: 210 40% 98%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    --chart-1: 217.2 91.2% 59.8%;
+    --chart-2: 280 65% 60%;
+    --chart-3: 333 71% 51%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 187 72% 42%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-active: 217.2 91.2% 59.8%;
+    --sidebar-active-foreground: 210 40% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* Enable horizontal scrolling with touch */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Ensure the container allows for horizontal scrolling */
+.w-max {
+  width: max-content;
+}
+
+/* Custom scrollbar styling */
+.thin-scrollbar {
+  scrollbar-width: thin;  /* Firefox */
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Webkit (Chrome, Safari, Edge) custom scrollbar */
+.thin-scrollbar::-webkit-scrollbar {
+  height: 6px;  /* for horizontal scrollbar */
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 3px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+
+@layer components {
+  [data-sidebar="menu-button"][data-active="true"] {
+    @apply !bg-[hsl(var(--sidebar-primary)/0.15)] !text-[hsl(var(--sidebar-primary))];
+  }
+
+  [data-sidebar="menu-button"]:hover:not([data-active="true"]) {
+    @apply !bg-[hsl(var(--sidebar-accent))] !text-[hsl(var(--sidebar-foreground))];
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Optimized scrolling for webkit browsers - keep scrollbars subtle */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.website-snapshot-scrollbar {
+  scrollbar-width: auto;
+}
+
+/* Website Snapshot Specific Scrollbar */
+.website-snapshot-scrollbar::-webkit-scrollbar {
+  height: 12px;
+}
+
+.website-snapshot-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.website-snapshot-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.website-snapshot-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Enhanced scroll performance for touch devices only */
+@media (hover: none) and (pointer: coarse) {
+  .cmdk-list, [cmdk-list] {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Fix for trackpad scrolling in popover content inside dialogs */
+[data-radix-popper-content-wrapper] [data-cmdk-list],
+[data-radix-popper-content-wrapper] .cmdk-list,
+[data-radix-dialog-content] [data-cmdk-list],
+[data-radix-dialog-content] .cmdk-list {
+  overflow-y: auto !important;
+  max-height: 300px !important;
+  scroll-behavior: auto !important;
+  -webkit-overflow-scrolling: auto !important;
+}
+
+/* Ensure dialog doesn't interfere with popover scrolling */
+[data-radix-dialog-overlay] {
+  pointer-events: auto;
+}
+
+[data-radix-dialog-content] {
+  pointer-events: auto;
+}
+
+/* Specific fix for MultiSelect in dialogs */
+.dialog-multiselect [data-radix-popper-content-wrapper] [data-cmdk-list] {
+  scroll-behavior: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overflow-y: scroll !important;
+}
+
+/* Force proper scrolling for command lists in modal popovers */
+[data-radix-popover-content][data-state="open"] [data-cmdk-list] {
+  scroll-behavior: auto !important;
+  overflow-y: scroll !important;
+  overscroll-behavior-y: contain !important;
+}
+
+/* Prevent page scrolling for calculations tab */
+.calculations-tab-container {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Prevent body/html scrolling when calculations tab is active */
+body.calculations-tab-active,
+html.calculations-tab-active {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+/* Ensure workspace content doesn't scroll for calculations tab */
+.calculations-tab-container [data-radix-scroll-area-viewport],
+.calculations-tab-container [data-radix-scroll-area-root] {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+/* Fixed-width table styling - keeps table width constant, no horizontal scroll */
+.table-fixed-width {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-fixed-width .w-full {
+  width: 100%;
+}
+
+.table-fixed-width table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-fixed-width thead,
+.table-fixed-width tbody {
+  width: 100%;
+  display: table;
+  table-layout: fixed;
+}
+
+.table-fixed-width tr {
+  width: 100%;
+  display: table-row;
+}
+
+.table-fixed-width td,
+.table-fixed-width th {
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  display: table-cell;
+}
+

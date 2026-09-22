@@ -1,7 +1,11 @@
 'use client';
 
 /**
- * Renders one CRISIL evidence passage.
+ * Renders one evidence passage.
+ *
+ * The passage is quoted from the DRHP itself: this is an internal-consistency
+ * check, so a claim is corroborated or contradicted by another statement in
+ * the same document rather than by an outside industry report.
  *
  * Everything here is plain structured data parsed at build time — no markup
  * from the model reaches the DOM. Isolated in its own file (task E5) so the
@@ -12,14 +16,14 @@ export default function Passage({ e, onOpenSource }) {
   return (
     <div className="passage">
       <div className="passage-head">
-        <span className="passage-src">CRISIL Report · p.{e.page}</span>
+        <span className="passage-src">DRHP · p.{e.page}</span>
         {onOpenSource && (
           <button
             className="linkbtn tiny"
             onClick={(ev) => { ev.stopPropagation(); onOpenSource(e); }}
             title={locatable
-              ? 'Open this page of the CRISIL report with the passage highlighted'
-              : 'Open this page of the CRISIL report'}
+              ? 'Open this page of the DRHP with the passage highlighted'
+              : 'Open this page of the DRHP'}
           >
             View source page{locatable ? '' : ' (not highlighted)'}
           </button>

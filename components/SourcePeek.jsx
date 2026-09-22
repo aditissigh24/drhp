@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * The CRISIL report page behind a piece of evidence, with the passage
- * highlighted (tasks E6–E8).
+ * The DRHP page behind a piece of evidence, with the passage highlighted
+ * (tasks E6–E8). The evidence is quoted from the document under review, so
+ * this opens the same PDF the reader is already scrolling, at another page.
  *
- * A peek rather than a permanent third pane: only 106 of 942 claims carry any
- * evidence at all, so a pane devoted to it would sit empty ~89% of the time.
+ * A peek rather than a permanent third pane: only 1,493 of 9,053 claims carry
+ * evidence that could be located on its page, so a pane devoted to it would
+ * sit empty most of the time.
  *
  * The PDF is fetched on first open and cached for the session — it never costs
  * the initial page load.
@@ -74,7 +76,7 @@ export default function SourcePeek({ evidence, sourcePdf, onClose }) {
     <div className="peek" role="dialog" aria-label="Source document">
       <div className="peek-head">
         <div className="peek-title">
-          CRISIL Industry Report
+          DRHP
           <span className="peek-sub">page {evidence.page}</span>
         </div>
         <button className="linkbtn" onClick={onClose}>Close</button>

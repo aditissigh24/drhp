@@ -4,9 +4,10 @@
  *
  *   node scripts/build-anchors.mjs [--report]
  *
- * Input is the verification report produced by the AI layer: the same
- * raw_text / context_sentence / page_number the old extraction carried, plus a
- * verification `status` per claim and the CRISIL evidence behind it.
+ * Input is the internal-consistency report produced by the AI layer: a
+ * raw_text / context_sentence / page_number per claim, a `status` saying
+ * whether the rest of the document agrees with it, and the passages from this
+ * same document that were compared against.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -36,18 +37,38 @@ function findFile(names, dirs, { optional = false } = {}) {
   throw new Error(`Could not find ${names[0]}. Looked in:\n  ${dirs.join('\n  ')}`);
 }
 
-const PDF = findFile(['Registration_24032026122414_MHEL_DRHP.pdf', 'drhp.pdf'], SEARCH_DIRS);
-const REPORT = findFile(['manipal_verification_report.json'], SEARCH_DIRS);
-// Optional: only needed once the source-viewer tasks (E6–E8) land.
-const CRISIL = findFile(['Industry_report_Manipal.pdf', 'crisil.pdf'], SEARCH_DIRS, { optional: true });
+const PDF = findFile([
+  'Project Namo_Consolidated DRHP_22.09.2026_V1.pdf',
+  'Registration_24032026122414_MHEL_DRHP.pdf',
+  'drhp.pdf',
+], SEARCH_DIRS);
+const REPORT = findFile([
+  'internal_consistency_report (1).json',
+  'internal_consistency_report.json',
+  'manipal_verification_report.json',
+], SEARCH_DIRS);
 const OUT_DIR = path.join(FRONTEND, 'public');
 
 const report = process.argv.includes('--report');
 
 const data = JSON.parse(readFileSync(REPORT, 'utf8'));
+
+/**
+ * `page_number` is 0-indexed against the PDF — confirmed on 398 of 400 testable
+ * numeric claims, against 1 at the unshifted index. The external-source report
+ * this script used to read was 1-indexed for the document and 0-indexed only
+ * for its evidence, so the shift is applied once, here, and every page number
+ * downstream of this line is a real 1-based PDF page.
+ */
+const toPdfPage = (n) => n + 1;
+
 // claim_id is stable and traceable back to the report; the old positional
 // `f<i>` ids were not, and broke the moment the extraction was regenerated.
-const items = data.items.map((x) => ({ ...x, id: x.claim_id }));
+const items = data.items.map((x) => ({
+  ...x,
+  id: x.claim_id,
+  page_number: toPdfPage(x.page_number),
+}));
 
 const doc = await getDocument({ url: new URL(`file://${PDF}`), useSystemFonts: true }).promise;
 
@@ -66,7 +87,12 @@ for (const pn of needed) {
   // Figures pasted in as bitmaps have no text layer. `npm run ocr` renders and
   // OCRs those pages into pdf.js-shaped word boxes; if a cache exists, it acts
   // as a second layer the same matcher can run against.
-  const cached = path.join(HERE, 'cache', `ocr-${pn}.json`);
+  //
+  // Scoped by doc_id because the cache is keyed only by page number: a cache
+  // left behind by a different document silently answers for pages that have
+  // nothing to do with it. One did, and anchored a claim from page 159 onto
+  // page 232 of an unrelated DRHP.
+  const cached = path.join(HERE, 'cache', data.doc_id, `ocr-${pn}.json`);
   if (existsSync(cached)) {
     entry.OCR = preparePage(JSON.parse(readFileSync(cached, 'utf8')).items);
   }
@@ -120,7 +146,16 @@ const stats = {
 };
 const misses = [];
 
+// 9,053 claims over 571 pages is a long enough run that silence looks like a
+// hang, and the whole-document sweep below is the expensive part.
+let done = 0;
+const started = Date.now();
+
 for (const f of items) {
+  if (++done % 500 === 0) {
+    const secs = ((Date.now() - started) / 1000).toFixed(0);
+    console.log(`  ${done}/${items.length} claims  (${stats.placed} placed, ${stats.missed} missed, ${secs}s)`);
+  }
   let resolved = null;
   const tryPage = (pn, accept) => {
     const entry = pages.get(pn);
@@ -236,25 +271,37 @@ for (const g of groups.values()) {
 stats.marks = groups.size;
 stats.stacked = stats.placed - groups.size;
 
-// ── CRISIL source pages: geometry for the evidence peek (tasks E6–E8) ─────
+// ── evidence source pages: geometry for the evidence peek ──────────────────
 // Matching happens here, offline, like everything else — the viewer renders
 // rects it is handed rather than running a matcher in the browser.
-const crisilPages = new Map();
-if (CRISIL) {
-  const cdoc = await getDocument({ url: new URL(`file://${CRISIL}`), useSystemFonts: true }).promise;
+//
+// This is an *internal consistency* report: all 7,062 evidence entries carry
+// the document's own doc_id, so a passage is quoted from the DRHP itself
+// rather than from an outside industry report. Pages already prepared for
+// claim matching are reused; only the ones evidence reaches on its own are
+// loaded again.
+const evidencePages = new Map();
+{
   const wanted = [...new Set(
-    items.flatMap((f) => (f.evidence || []).map((e) => e.page_number + 1)),
-  )].filter((p) => p >= 1 && p <= cdoc.numPages).sort((a, b) => a - b);
+    items.flatMap((f) => (f.evidence || []).map((e) => toPdfPage(e.page_number))),
+  )].filter((p) => p >= 1 && p <= doc.numPages).sort((a, b) => a - b);
+  let loaded = 0;
   for (const pn of wanted) {
-    const page = await cdoc.getPage(pn);
+    const prepared = pages.get(pn);
+    if (prepared) {
+      evidencePages.set(pn, { L: prepared.P, width: prepared.width, height: prepared.height });
+      continue;
+    }
+    const page = await doc.getPage(pn);
     const vp = page.getViewport({ scale: 1 });
-    crisilPages.set(pn, { L: preparePage((await page.getTextContent()).items), width: vp.width, height: vp.height });
+    evidencePages.set(pn, { L: preparePage((await page.getTextContent()).items), width: vp.width, height: vp.height });
+    loaded++;
   }
-  console.log(`crisil pages prepared: ${crisilPages.size}`);
+  console.log(`evidence pages prepared: ${evidencePages.size} (${loaded} newly loaded)`);
 }
 
 /**
- * Highlight geometry for one evidence passage on its CRISIL page.
+ * Highlight geometry for one evidence passage on its own page.
  *
  * The passage is matched in segments rather than whole: a paragraph the model
  * lifted from the report rarely survives verbatim (it re-wraps, drops a
@@ -299,17 +346,20 @@ const claims = items.map((f) => {
   const evidence = (f.evidence || []).map((e) => {
     evidenceCount++;
     const { blocks, plain } = parseEvidence(e.text);
-    // Report pages are 0-indexed against Industry_report_Manipal.pdf; verified
-    // +1 on 122/122 testable passages. Keep both: `page` is what the report
-    // says, `pdfPage` is where to actually render it.
-    const pdfPage = e.page_number + 1;
-    const src = crisilPages.get(pdfPage);
+    // Evidence pages are 0-indexed like claim pages and point into the DRHP
+    // itself, so both fields carry the same 1-based page the claim cards show.
+    // They used to differ: evidence lived in a separate industry report whose
+    // printed numbering happened to match the unshifted index, so the viewer
+    // labelled a passage "page 443" while rendering PDF page 444. Same
+    // document now, so one numbering.
+    const pdfPage = toPdfPage(e.page_number);
+    const src = evidencePages.get(pdfPage);
     const rects = evidenceRects(plain, src);
     if (rects.length) evidenceWithRects++;
     return {
       evidenceId: e.evidence_id,
       sourceDocId: e.source_doc_id,
-      page: e.page_number,
+      page: pdfPage,
       pdfPage,
       pageWidth: src?.width ?? null,
       pageHeight: src?.height ?? null,
@@ -360,7 +410,15 @@ const serve = (src, name) => {
   return true;
 };
 serve(PDF, 'drhp.pdf');
-const crisilServed = serve(CRISIL, 'crisil.pdf');
+
+/**
+ * Every page of the document, not just the ones carrying a claim.
+ *
+ * The 9,053 claims land on 475 pages, but those fall in 64 separate runs with
+ * 96 gaps between them. Listing only the claim pages makes the viewer skip
+ * unpredictably mid-scroll; listing all of them reads as the document it is.
+ */
+const viewerPages = Array.from({ length: doc.numPages }, (_, i) => i + 1);
 
 writeFileSync(path.join(OUT_DIR, 'anchors.json'), JSON.stringify({
   doc_id: data.doc_id,
@@ -375,10 +433,12 @@ writeFileSync(path.join(OUT_DIR, 'verification.json'), JSON.stringify({
   runId: data.run_id,
   generatedAt: data.generated_at,
   sourceDocIds: data.source_doc_ids,
-  sourcePdf: crisilServed ? '/crisil.pdf' : null,
+  // Evidence is quoted from this same document, so the source viewer opens the
+  // DRHP rather than a separate industry report.
+  sourcePdf: '/drhp.pdf',
   totalClaims: data.total_claims,
   statusCounts: data.status_counts,
-  pages: pageNums,
+  pages: viewerPages,
   claims,
 }));
 
@@ -392,7 +452,7 @@ console.log(`unplaced         ${stats.missed}  (${pct(stats.missed)})`);
 console.log(`  via OCR        ${stats.viaOcr || 0}  (text that lives inside a figure)`);
 console.log(`marks drawn      ${stats.marks}  (${stats.stacked} duplicate claims share a span)`);
 console.log(`evidence         ${evidenceCount} passage(s) parsed, 0 leaked markup`);
-console.log(`  highlightable  ${evidenceWithRects}/${evidenceCount} located on their CRISIL page`);
+console.log(`  highlightable  ${evidenceWithRects}/${evidenceCount} located on their source page`);
 
 console.log('\nby status:');
 for (const [k, v] of Object.entries(stats.byStatus).sort((a, b) => b[1] - a[1])) {
